@@ -37,8 +37,8 @@ PRICEBASE1 = 250  # 票价基准1
 PRICEBASE2 = 200  # 票价基准2
 LIVEBASE = 200  # 生活花费基准
 ADBASE = 20  # 广告花费基准
-ENVBASE = 4  # 环境花费基准
-INFRABASE = 4  # 基建花费基准
+ENVBASE = 20  # 环境花费基准
+INFRABASE = 20  # 基建花费基准
 
 N_RATIO_LOWER = 0.2
 N_RATIO_UPPER = 2.5
@@ -50,7 +50,8 @@ INFRA_RATIO_LOWER = 0.2
 INFRA_RATIO_UPPER = 1.6
 INFRA_RATIO_TURN = 0.7
 AD_ZEROX = 30
-ENV_ZEROX = 30
+ENV_RATIO = 0.3
+ENV_ZEROX = ENVBASE / ENV_RATIO
 
 
 def normalize(basex, basescore, zerox, x):
@@ -146,8 +147,8 @@ def FEnvInfra(x):
     print("ENV * GovEnvCost / N_ENV_BASE ==", ENV * GovEnvCost / N_ENV_BASE)
     print("INFRA * GovInfraCost / N_ENV_BASE ==", INFRA * GovInfraCost / N_ENV_BASE)
     
-    GovEnvCostFactor = 1 - normalize(ENVBASE, 0.8, ENV_ZEROX, ENV * GovEnvCost / N_ENV_BASE)  # 0-1
-    GovInfraCostFactor = 1 - normalize(INFRABASE, 0.8, ENV_ZEROX, INFRA * GovInfraCost / N_ENV_BASE)  # 0-1
+    GovEnvCostFactor = 1 - normalize(ENVBASE, ENV_RATIO, ENV_ZEROX, ENV * GovEnvCost / N_ENV_BASE)  # 0-1
+    GovInfraCostFactor = 1 - normalize(INFRABASE, ENV_RATIO, ENV_ZEROX, INFRA * GovInfraCost / N_ENV_BASE)  # 0-1
     
     print("GovEnvCostFactor ==", GovEnvCostFactor)
     print("GovInfraCostFactor ==",GovInfraCostFactor)
@@ -222,8 +223,8 @@ def FSat(x):
     # print("ENV * GovEnvCost / N_ENV_BASE ==", ENV * GovEnvCost / N_ENV_BASE)
     # print("INFRA * GovInfraCost / N_ENV_BASE ==", INFRA * GovInfraCost / N_ENV_BASE)
     
-    GovEnvCostFactor = 1 - normalize(ENVBASE, 0.8, ENV_ZEROX, ENV * GovEnvCost / N_ENV_BASE)  # 0-1
-    GovInfraCostFactor = 1 - normalize(INFRABASE, 0.8, ENV_ZEROX, INFRA * GovInfraCost / N_ENV_BASE)  # 0-1
+    GovEnvCostFactor = 1 - normalize(ENVBASE, ENV_RATIO, ENV_ZEROX, ENV * GovEnvCost / N_ENV_BASE)  # 0-1
+    GovInfraCostFactor = 1 - normalize(INFRABASE, ENV_RATIO, ENV_ZEROX, INFRA * GovInfraCost / N_ENV_BASE)  # 0-1
     
     # print("GovEnvCostFactor ==", GovEnvCostFactor)
     # print("GovInfraCostFactor ==",GovInfraCostFactor)
@@ -312,8 +313,8 @@ for i in range(len(front)):
         GovInfraCostRatio = 1 - GovEnvCostRatio
         GovEnvCost = GovEnvInfraCost * GovEnvCostRatio  # 政府环境支出
         GovInfraCost = GovEnvInfraCost * GovInfraCostRatio  # 政府基建支出
-        GovEnvCostFactor = 1 - normalize(ENVBASE, 0.8, ENV_ZEROX, ENV * GovEnvCost / N_ENV_BASE)  # 0-1
-        GovInfraCostFactor = 1 - normalize(INFRABASE, 0.8, ENV_ZEROX, INFRA * GovInfraCost / N_ENV_BASE)  # 0-1
+        GovEnvCostFactor = 1 - normalize(ENVBASE, ENV_RATIO, ENV_ZEROX, ENV * GovEnvCost / N_ENV_BASE)  # 0-1
+        GovInfraCostFactor = 1 - normalize(INFRABASE, ENV_RATIO, ENV_ZEROX, INFRA * GovInfraCost / N_ENV_BASE)  # 0-1
         TouristFactor = normalize(N_ENV_BASE, 0.85, 50000, (N_Tourist * K_TOURIST + N_RESIDENT * K_RESIDENT))  # 0-1
         EnvFactor = GovEnvCostFactor * K_GOVENVCOST + TouristFactor * K_TOURISTENV
         InfraFator = GovInfraCostFactor * K_GOVINFRACOST + TouristFactor * K_TOURISTINFRA
@@ -323,8 +324,8 @@ for i in range(len(front)):
         Sat_Tourist = CostFactor * K_TOURISTCOSTSAT + EnvInfra * K_TOURISTENVINFRASAT
         CostResidentFactor = normalize(LIVEBASE, 0.9, 1000, CostResident * (1 + TaxResident))  # 0-1
         Sat_Resident = CostResidentFactor * K_RESIDENTCOSTSAT + EnvInfra * K_RESIDENTENVINFRASAT
-        if Env > 0.6 and Infra > 0.6:
-            with open('./t1.txt','a') as file:
+        if Env > 0.7 and Infra > 0.7:
+            with open('./t2.txt','a') as file:
                 print(i, file=file) 
                 print(x[i], file=file)
                 print(func[i], file=file)
