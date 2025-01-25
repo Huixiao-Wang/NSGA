@@ -119,11 +119,13 @@ def func5(arr):
 
 
 problem = Problem(num_of_variables=8, objectives=[func1, func2, func3, func4, func5], variables_range=[(0.1, 0.5),(0.1, 0.5),(20, 1000),(20, 1000),(20, 1000),(20, 500),(0.1,800),(0.1,800)], same_range=False, expand=False)
-evo = Evolution(problem,num_of_generations=1000,num_of_individuals=500,mutation_param=20)
+evo = Evolution(problem,num_of_generations=10000,num_of_individuals=1200,mutation_param=20)
 func = [i.objectives for i in evo.evolve()]
 for i in func:
-    if i[0] < 16000 and i[1] < 0 and i[2] < 0 and i[3] < 1000 and i[4] < i[3]:
-        print(i)
+    if i[0] < 16000 and i[1] < 0 and i[2] < 0 and i[3] < 500 and i[4] < 300 and i[4] < i[3]:
+        # 输出到txt文件
+        with open('output.txt', 'a') as f:
+            f.write(str(i) + '\n')
 
 # function1 = [i[0] for i in func]
 # function2 = [i[1] for i in func]
