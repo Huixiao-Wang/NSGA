@@ -4,128 +4,344 @@ import matplotlib.pyplot as plt
 import math
 
 N_TOURIST = 20000
+GOV_INCOME = 20000000
+SAT_TOURIST = 0.8
+SAT_RESIDENT = 0.6
+ENV = 0.8
+INFRA = 0.8
+
 N_RESIDENT = 30000
-N_ENVBASE = 8000
-N_GOVBASE = 10000
+N_ENV_BASE = 15000
+K_PRICE1 = 0.45  # 票价因子1
+K_PRICE2 = 1 - K_PRICE1  # 票价因子2
+K_TICKET = 0.5  # 票价因子
+K_LIVE = 1 - K_TICKET  # 生活因子
+K_COST = 0.3  # 花费因子
+K_AD = 0.5  # 广告因子
+K_SAT = 1 - K_COST - K_AD  # 满意度因子
+K_TOURIST = 0.7  # 游客因子
+K_RESIDENT = 1 - K_TOURIST  # 本地居民因子
+K_TOURISTENV = 0.45  # 游客影响环境因子
+K_TOURISTINFRA = 0.45  # 游客影响基建因子
+K_ENV = 0.55  # 环境因子
+K_INFRA = 1 - K_ENV  # 基建因子
+K_GOVENVCOST = 1 - K_TOURISTENV  # 政府环境支出因子  
+K_GOVINFRACOST = 1 - K_TOURISTINFRA  # 政府基建支出因子
+K_TOURISTCOSTSAT = 0.45  # 游客花费影响满意度因子
+K_RESIDENTCOSTSAT = 0.5  # 居民花费影响满意度因子
+K_TOURISTENVINFRASAT = 1 - K_TOURISTCOSTSAT  # 游客环境基建影响满意度因子
+K_RESIDENTENVINFRASAT = 1 - K_RESIDENTCOSTSAT  # 居民环境基建影响满意度因子
+K_TOURISTSAT = 0.55  # 游客满意度因子
+K_RESIDENTSAT = 1 - K_TOURISTSAT  # 居民满意度因子
+PRICEBASE1 = 250  # 票价基准1
+PRICEBASE2 = 200  # 票价基准2
+LIVEBASE = 200  # 生活花费基准
+ADBASE = 20  # 广告花费基准
+ENVBASE = 4  # 环境花费基准
+INFRABASE = 4  # 基建花费基准
+
+N_RATIO_LOWER = 0.2
+N_RATIO_UPPER = 2.5
+N_RATIO_TURN = 0.7
+ENV_RATIO_LOWER = 0.2
+ENV_RATIO_UPPER = 1.4
+ENV_RATIO_TURN = 0.7
+INFRA_RATIO_LOWER = 0.2
+INFRA_RATIO_UPPER = 1.6
+INFRA_RATIO_TURN = 0.7
+AD_ZEROX = 30
+ENV_ZEROX = 30
 
 
+def normalize(basex, basescore, zerox, x):
+    if x < basex:
+        return (1 - x / basex * (1 - basescore))
+    else:
+        return max(0, basescore - (x - basex) / (zerox - basex) * basescore)
 
-def func1(arr):
-    Tax_tourist = arr[0]  # 游客税 百分比
-    Tax_other = arr[1]  # 其他税 百分比
-    Ticket_g = arr[2]  # 游客冰川门票花费 单个人
-    Ticket_other = arr[3]  # 游客其他景点门票花费 单个人
-    Cost_tourist_other = arr[4]  # 游客其余花费 单个人
-    Cost_resident = arr[5]  # 本地花费 单个人
-    Ad_g = arr[6]  # 冰川宣传花费
-    Ad_other = arr[7]  # 其余景点宣传花费
+def twoline(b, turnx, turny, B, x):
+    if x < turnx:
+        return (b + (x - 0) * (turny - b) / (turnx - 0))
+    else:
+        return (turny + (x - turnx) * (B - turny) / (1 - turnx))
 
-    N_tourist = N_TOURIST  # 游客总人数
-    N_env_base = N_ENVBASE  # 平衡环境游客基数
-    N_gov_base = N_GOVBASE  # 平衡基础设施游客基数
-    N_resident = N_RESIDENT  # 本地人数
-    N_tot = N_tourist + N_resident  # 总人数
-
-    Ad = Ad_g + Ad_other  # 总宣传费用
-    N_tourist_g = N_tourist * (Ad_g/Ad)  # 冰川游客人数
-    N_tourist_other = N_tourist * (Ad_other / Ad)  # 其他景点人数
-
-    k_env_g = 0.7  # 冰川景点的环境影响因子 归一化
-    k_env_other = 0.3  # 其余景点的环境影响因子
-    k_env = 0.6  # 环境的影响因子
-    Fenv = k_env *(k_env_g * N_tourist_g + k_env_other * N_tourist_other - N_env_base)  # 人数
-
-    k_gov = 0.4  # 政府基建影响因子
-    Fgov = k_gov * (N_tot - N_gov_base)  # 人数
+def FGovIncome(x):
+    TicketPrice1 = x[0]  # 门票价格1
+    TicketPrice2 = x[1]  # 门票价格2
+    TaxResident = x[2]  # 居民税收
+    CostTourist = x[3]  # 旅游者成本
+    CostResident = x[4]  # 居民成本
+    GovCostRatio = x[5]  # 政府成本比例
+    GovAdCostRatio = x[6]  # 政府广告成本比例
+    GovAd1CostRatio = x[7]  # 政府广告1成本比例
+    GovEnvCostRatio = x[8]  # 政府环境成本比例
     
-    return Fenv + Fgov
+    GovCost = GOV_INCOME * GovCostRatio  # 政府成本
+    GovAdCost = GovCost * GovAdCostRatio  # 政府广告总成本
+    GovAd2CostRatio = 1 - GovAd1CostRatio  # 政府广告2成本比例
+    
+    TicketFactor = K_PRICE1 * normalize(PRICEBASE1, 0.95, 1500, TicketPrice1) + K_PRICE2 * normalize(PRICEBASE2, 0.95, 1000, TicketPrice2)  # 0-1
+    # print("TicketFactor ==",TicketFactor)
+    LiveFactor = normalize(LIVEBASE, 0.95, 1500, CostTourist * (1 + TaxResident))  # 0-1
+    # print("CostTourist * (1 + TaxResident) ==",CostTourist * (1 + TaxResident))
+    # print("LiveFactor ==",LiveFactor)
+    CostFactor = K_TICKET * TicketFactor + K_LIVE * LiveFactor  # 0-1
+    # print("CostFactor ==",CostFactor)
+    AdFactor = 1 - normalize(ADBASE, 0.85, AD_ZEROX, GovAdCost / N_ENV_BASE)  # 0-1
+    # print("GovAdCost / N_ENV_BASE ==",GovAdCost / N_ENV_BASE)
+    # print("AdFactor ==",AdFactor)
+    NFactor = K_AD * AdFactor + K_COST * CostFactor + K_SAT * SAT_TOURIST  # 0-1
+    # print("NFactor ==",NFactor)
+    N_Tourist = N_TOURIST * twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor)  # 旅游者数量
+    # print("twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor) ==",twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor))
+    # print("*********************")
 
-def func2(arr):
-    Tax_tourist = arr[0]  # 游客税 百分比
-    Tax_other = arr[1]  # 其他税 百分比
-    Ticket_g = arr[2]  # 游客冰川门票花费 单个人
-    Ticket_other = arr[3]  # 游客其他景点门票花费 单个人
-    Cost_tourist_other = arr[4]  # 游客其余花费 单个人
-    Cost_resident = arr[5]  # 本地花费 单个人
-    Ad_g = arr[6]  # 冰川宣传花费
-    Ad_other = arr[7]  # 其余景点宣传花费
+    N_Tourist1 = N_Tourist * GovAd1CostRatio  # 旅游者1数量
+    N_Tourist2 = N_Tourist * GovAd2CostRatio  # 旅游者2数量
+    GovTicketIncome = N_Tourist1 * TicketPrice1 + N_Tourist2 * TicketPrice2  # 政府门票收入
+    GovLiveIncome = (N_Tourist * CostTourist + N_RESIDENT * CostResident) * (1 + TaxResident)  # 政府生活收入
+    GovIncome = GovTicketIncome + GovLiveIncome- GovCost  # 政府总收入
+    
+    return -GovIncome
 
-    N_tourist = N_TOURIST  # 游客总人数
-    N_env_base = N_ENVBASE  # 平衡环境游客基数
-    N_resident = N_RESIDENT  # 本地人数
+def FEnvInfra(x):
+    TicketPrice1 = x[0]  # 门票价格1
+    TicketPrice2 = x[1]  # 门票价格2
+    TaxResident = x[2]  # 居民税收
+    CostTourist = x[3]  # 旅游者成本
+    CostResident = x[4]  # 居民成本
+    GovCostRatio = x[5]  # 政府成本比例
+    GovAdCostRatio = x[6]  # 政府广告成本比例
+    GovAd1CostRatio = x[7]  # 政府广告1成本比例
+    GovEnvCostRatio = x[8]  # 政府环境成本比例
+    
+    GovCost = GOV_INCOME * GovCostRatio  # 政府成本
+    GovAdCost = GovCost * GovAdCostRatio  # 政府广告总成本
+    GovEnvInfraCost = GovCost * (1 - GovAdCostRatio)  # 政府环境基建成本
+    
+    TicketFactor = K_PRICE1 * normalize(PRICEBASE1, 0.95, 1500, TicketPrice1) + K_PRICE2 * normalize(PRICEBASE2, 0.95, 1000, TicketPrice2)  # 0-1
+    print("TicketFactor ==",TicketFactor)
+    LiveFactor = normalize(LIVEBASE, 0.95, 1500, CostTourist * (1 + TaxResident))  # 0-1
+    print("CostTourist * (1 + TaxResident) ==",CostTourist * (1 + TaxResident))
+    print("LiveFactor ==",LiveFactor)
+    CostFactor = K_TICKET * TicketFactor + K_LIVE * LiveFactor  # 0-1
+    print("CostFactor ==",CostFactor)
+    AdFactor = 1 - normalize(ADBASE, 0.85, AD_ZEROX, GovAdCost / N_ENV_BASE)  # 0-1
+    print("GovAdCost / N_ENV_BASE ==",GovAdCost / N_ENV_BASE)
+    print("AdFactor ==",AdFactor)
+    NFactor = K_AD * AdFactor + K_COST * CostFactor + K_SAT * SAT_TOURIST  # 0-1
+    print("NFactor ==",NFactor)
+    N_Tourist = N_TOURIST * twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor)  # 旅游者数量
+    print("twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor) ==",twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor))
+    # print("*********************")
+    
 
-    Ad = Ad_g + Ad_other  # 总宣传费用
-    N_tourist_g = N_tourist * (Ad_g/Ad)  # 冰川游客人数
-    N_tourist_other = N_tourist * (Ad_other / Ad)  # 其他景点人数
+    GovInfraCostRatio = 1 - GovEnvCostRatio
+    GovEnvCost = GovEnvInfraCost * GovEnvCostRatio  # 政府环境支出
+    GovInfraCost = GovEnvInfraCost * GovInfraCostRatio  # 政府基建支出
+    
+    print("GovEnvCost ==",GovEnvCost)
+    print("GovInfraCost ==",GovInfraCost)
+    
+    print("ENV * GovEnvCost / N_ENV_BASE ==", ENV * GovEnvCost / N_ENV_BASE)
+    print("INFRA * GovInfraCost / N_ENV_BASE ==", INFRA * GovInfraCost / N_ENV_BASE)
+    
+    GovEnvCostFactor = 1 - normalize(ENVBASE, 0.8, ENV_ZEROX, ENV * GovEnvCost / N_ENV_BASE)  # 0-1
+    GovInfraCostFactor = 1 - normalize(INFRABASE, 0.8, ENV_ZEROX, INFRA * GovInfraCost / N_ENV_BASE)  # 0-1
+    
+    print("GovEnvCostFactor ==", GovEnvCostFactor)
+    print("GovInfraCostFactor ==",GovInfraCostFactor)
+    
+    TouristFactor = normalize(N_ENV_BASE, 0.85, 50000, (N_Tourist * K_TOURIST + N_RESIDENT * K_RESIDENT))  # 0-1
+    
+    print("N_Tourist * K_TOURIST + N_RESIDENT * K_RESIDENT ==",N_Tourist * K_TOURIST + N_RESIDENT * K_RESIDENT)
+    print("TouristFactor ==",TouristFactor)
+    
+    EnvFactor = GovEnvCostFactor * K_GOVENVCOST + TouristFactor * K_TOURISTENV
+    
+    print("EnvFactor ==",EnvFactor)
+    
+    InfraFator = GovInfraCostFactor * K_GOVINFRACOST + TouristFactor * K_TOURISTINFRA
+    
+    print("InfraFator ==",InfraFator)
+    
+    Env = min(ENV * twoline(ENV_RATIO_LOWER, ENV_RATIO_TURN, 1, ENV_RATIO_UPPER, EnvFactor), 1)
+    
+    print("Env ==",Env)
+    
+    Infra = min(INFRA * twoline(INFRA_RATIO_LOWER, INFRA_RATIO_TURN, 1, INFRA_RATIO_UPPER, InfraFator), 1)
+    
+    print("Infra ==", Infra)
+    
+    EnvInfra = Env * K_ENV + Infra * K_INFRA
+    
+    print("EnvInfra ==",EnvInfra)
+    
+    print("******************")
+    
+    return -EnvInfra
 
-    Feco = (N_tourist_g * Ticket_g + N_tourist_other * Ticket_other) * Tax_tourist + (N_tourist * Cost_tourist_other + N_resident * Cost_resident) * Tax_other - Ad * N_env_base  # 政府收入每天
+def FSat(x):
+    TicketPrice1 = x[0]  # 门票价格1
+    TicketPrice2 = x[1]  # 门票价格2
+    TaxResident = x[2]  # 居民税收
+    CostTourist = x[3]  # 旅游者成本
+    CostResident = x[4]  # 居民成本
+    GovCostRatio = x[5]  # 政府成本比例
+    GovAdCostRatio = x[6]  # 政府广告成本比例
+    GovAd1CostRatio = x[7]  # 政府广告1成本比例
+    GovEnvCostRatio = x[8]  # 政府环境成本比例
+    
+    GovCost = GOV_INCOME * GovCostRatio  # 政府成本
+    GovAdCost = GovCost * GovAdCostRatio  # 政府广告总成本
+    GovEnvInfraCost = GovCost * (1 - GovAdCostRatio)  # 政府环境基建成本
+     
+    TicketFactor = K_PRICE1 * normalize(PRICEBASE1, 0.95, 1500, TicketPrice1) + K_PRICE2 * normalize(PRICEBASE2, 0.95, 1000, TicketPrice2)  # 0-1
+    # print("TicketFactor ==",TicketFactor)
+    LiveFactor = normalize(LIVEBASE, 0.95, 1500, CostTourist * (1 + TaxResident))  # 0-1
+    # print("CostTourist * (1 + TaxResident) ==",CostTourist * (1 + TaxResident))
+    # print("LiveFactor ==",LiveFactor)
+    CostFactor = K_TICKET * TicketFactor + K_LIVE * LiveFactor  # 0-1
+    # print("CostFactor ==",CostFactor)
+    AdFactor = 1 - normalize(ADBASE, 0.85, AD_ZEROX, GovAdCost / N_ENV_BASE)  # 0-1
+    # print("GovAdCost / N_ENV_BASE ==",GovAdCost / N_ENV_BASE)
+    # print("AdFactor ==",AdFactor)
+    NFactor = K_AD * AdFactor + K_COST * CostFactor + K_SAT * SAT_TOURIST  # 0-1
+    # print("NFactor ==",NFactor)
+    N_Tourist = N_TOURIST * twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor)  # 旅游者数量
+    # print("twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor) ==",twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor))
+    # print("*********************")
+    
+    GovInfraCostRatio = 1 - GovEnvCostRatio
+    GovEnvCost = GovEnvInfraCost * GovEnvCostRatio  # 政府环境支出
+    GovInfraCost = GovEnvInfraCost * GovInfraCostRatio  # 政府基建支出
+    
+    # print("GovEnvCost ==",GovEnvCost)
+    # print("GovInfraCost ==",GovInfraCost)
+    
+    # print("ENV * GovEnvCost / N_ENV_BASE ==", ENV * GovEnvCost / N_ENV_BASE)
+    # print("INFRA * GovInfraCost / N_ENV_BASE ==", INFRA * GovInfraCost / N_ENV_BASE)
+    
+    GovEnvCostFactor = 1 - normalize(ENVBASE, 0.8, ENV_ZEROX, ENV * GovEnvCost / N_ENV_BASE)  # 0-1
+    GovInfraCostFactor = 1 - normalize(INFRABASE, 0.8, ENV_ZEROX, INFRA * GovInfraCost / N_ENV_BASE)  # 0-1
+    
+    # print("GovEnvCostFactor ==", GovEnvCostFactor)
+    # print("GovInfraCostFactor ==",GovInfraCostFactor)
+    
+    
+    TouristFactor = normalize(N_ENV_BASE, 0.85, 50000, (N_Tourist * K_TOURIST + N_RESIDENT * K_RESIDENT))  # 0-1
+    
+    # print("N_Tourist * K_TOURIST + N_RESIDENT * K_RESIDENT ==",N_Tourist * K_TOURIST + N_RESIDENT * K_RESIDENT)
+    
+    
+    EnvFactor = GovEnvCostFactor * K_GOVENVCOST + TouristFactor * K_TOURISTENV
+    
+    # print("EnvFactor ==",EnvFactor)
+    
+    InfraFator = GovInfraCostFactor * K_GOVINFRACOST + TouristFactor * K_TOURISTINFRA
+    
+    # print("InfraFator ==",InfraFator)
+    
+    Env = min(ENV * twoline(ENV_RATIO_LOWER, ENV_RATIO_TURN, 1, ENV_RATIO_UPPER, EnvFactor), 1)
+    
+    # print("Env ==",Env)
+    
+    Infra = min(INFRA * twoline(INFRA_RATIO_LOWER, INFRA_RATIO_TURN, 1, INFRA_RATIO_UPPER, InfraFator), 1)
+    
+    # print("Infra ==", Infra)
+    
+    EnvInfra = Env * K_ENV + Infra * K_INFRA
+    
+    # print("EnvInfra ==",EnvInfra)
+    
+    # print("******************")
+    
+    
+    Sat_Tourist = CostFactor * K_TOURISTCOSTSAT + EnvInfra * K_TOURISTENVINFRASAT
+    
+    # print("Sat_Tourist==",Sat_Tourist)
+    
+    CostResidentFactor = normalize(LIVEBASE, 0.9, 1000, CostResident * (1 + TaxResident))  # 0-1
+    
+    # print("CostResidentFactor==",CostResidentFactor)
+    
+    Sat_Resident = CostResidentFactor * K_RESIDENTCOSTSAT + EnvInfra * K_RESIDENTENVINFRASAT
 
-    return -Feco
+    # print("Sat_Resident",Sat_Resident)
+        
+    Sat = Sat_Tourist * K_TOURISTSAT + Sat_Resident * K_RESIDENTSAT
+    
+    # print("Sat ==",Sat)
+    
+    # print("********")
+    
+    return -Sat
 
-def func3(arr):
-    Tax_tourist = arr[0]  # 游客税 百分比
-    Tax_other = arr[1]  # 其他税 百分比
-    Ticket_g = arr[2]  # 游客冰川门票花费 单个人
-    Ticket_other = arr[3]  # 游客其他景点门票花费 单个人
-    Cost_tourist_other = arr[4]  # 游客其余花费 单个人
-    Cost_resident = arr[5]  # 本地花费 单个人
-    Ad_g = arr[6]  # 冰川宣传花费
-    Ad_other = arr[7]  # 其余景点宣传花费
+problem = Problem(num_of_variables=9, objectives=[FGovIncome, FEnvInfra, FSat], variables_range=[(0.1, 500),(0.1, 500),(0.01, 0.3),(50, 500),(20, 500),(0.01, 0.4),(0.01, 0.99),(0.01, 0.99),(0.01, 0.99)], same_range=False, expand=False)
+evo = Evolution(problem,num_of_generations=2000,num_of_individuals=100,mutation_param=20)
+front = evo.evolve()
+x = [i.features for i in front]
+func = [i.objectives for i in front]
+for i in range(len(front)):
+    if x[i][0] < 500 and x[i][1] < 500 and x[i][3] < 500 and x[i][4] < 500 and func[i][0] < 0 and func[i][1] < -0.5 :
+        TicketPrice1 = x[i][0]  # 门票价格1
+        TicketPrice2 = x[i][1]  # 门票价格2
+        TaxResident = x[i][2]  # 居民税收
+        CostTourist = x[i][3]  # 旅游者成本
+        CostResident = x[i][4]  # 居民成本
+        GovCostRatio = x[i][5]  # 政府成本比例
+        GovAdCostRatio = x[i][6]  # 政府广告成本比例
+        GovAd1CostRatio = x[i][7]  # 政府广告1成本比例
+        GovEnvCostRatio = x[i][8]  # 政府环境成本比例
+    
+        GovCost = GOV_INCOME * GovCostRatio  # 政府成本
+        GovAdCost = GovCost * GovAdCostRatio  # 政府广告总成本
+        GovAd2CostRatio = 1 - GovAd1CostRatio  # 政府广告2成本比例
+        GovEnvInfraCost = GovCost * (1 - GovAdCostRatio)  # 政府环境基建成本
+        TicketFactor = K_PRICE1 * normalize(PRICEBASE1, 0.95, 1500, TicketPrice1) + K_PRICE2 * normalize(PRICEBASE2, 0.95, 1000, TicketPrice2)  # 0-1
+        LiveFactor = normalize(LIVEBASE, 0.95, 1500, CostTourist * (1 + TaxResident))  # 0-1
+        CostFactor = K_TICKET * TicketFactor + K_LIVE * LiveFactor  # 0-1
+        AdFactor = 1 - normalize(ADBASE, 0.85, AD_ZEROX, GovAdCost / N_ENV_BASE)  # 0-1
+        NFactor = K_AD * AdFactor + K_COST * CostFactor + K_SAT * SAT_TOURIST  # 0-1
+        N_Tourist = N_TOURIST * twoline(N_RATIO_LOWER, N_RATIO_TURN, 1, N_RATIO_UPPER, NFactor)  # 旅游者数量
+        N_Tourist1 = N_Tourist * GovAd1CostRatio  # 旅游者1数量
+        N_Tourist2 = N_Tourist * GovAd2CostRatio  # 旅游者2数量
+        GovTicketIncome = N_Tourist1 * TicketPrice1 + N_Tourist2 * TicketPrice2  # 政府门票收入
+        GovLiveIncome = (N_Tourist * CostTourist + N_RESIDENT * CostResident) * (1 + TaxResident)  # 政府生活收入
+        GovIncome = GovTicketIncome + GovLiveIncome- GovCost  # 政府总收入
+        GovInfraCostRatio = 1 - GovEnvCostRatio
+        GovEnvCost = GovEnvInfraCost * GovEnvCostRatio  # 政府环境支出
+        GovInfraCost = GovEnvInfraCost * GovInfraCostRatio  # 政府基建支出
+        GovEnvCostFactor = 1 - normalize(ENVBASE, 0.8, ENV_ZEROX, ENV * GovEnvCost / N_ENV_BASE)  # 0-1
+        GovInfraCostFactor = 1 - normalize(INFRABASE, 0.8, ENV_ZEROX, INFRA * GovInfraCost / N_ENV_BASE)  # 0-1
+        TouristFactor = normalize(N_ENV_BASE, 0.85, 50000, (N_Tourist * K_TOURIST + N_RESIDENT * K_RESIDENT))  # 0-1
+        EnvFactor = GovEnvCostFactor * K_GOVENVCOST + TouristFactor * K_TOURISTENV
+        InfraFator = GovInfraCostFactor * K_GOVINFRACOST + TouristFactor * K_TOURISTINFRA
+        Env = min(ENV * twoline(ENV_RATIO_LOWER, ENV_RATIO_TURN, 1, ENV_RATIO_UPPER, EnvFactor), 1)
+        Infra = min(INFRA * twoline(INFRA_RATIO_LOWER, INFRA_RATIO_TURN, 1, INFRA_RATIO_UPPER, InfraFator), 1)
+        EnvInfra = Env * K_ENV + Infra * K_INFRA
+        Sat_Tourist = CostFactor * K_TOURISTCOSTSAT + EnvInfra * K_TOURISTENVINFRASAT
+        CostResidentFactor = normalize(LIVEBASE, 0.9, 1000, CostResident * (1 + TaxResident))  # 0-1
+        Sat_Resident = CostResidentFactor * K_RESIDENTCOSTSAT + EnvInfra * K_RESIDENTENVINFRASAT
+        if Env > 0.6 and Infra > 0.6:
+            with open('./t1.txt','a') as file:
+                print(i, file=file) 
+                print(x[i], file=file)
+                print(func[i], file=file)
+                print("N_Tourist ==", N_Tourist, file=file)
+                print("GovIncome ==", GovIncome, file=file)
+                print("Env ==", Env, file=file)
+                print("Infra ==", Infra, file=file)
+                print("Sat_Tourist ==", Sat_Tourist, file=file)
+                print("Sat_Resident ==", Sat_Resident, file=file)
+                print('***********\n', file=file)
 
-    N_tourist = N_TOURIST  # 游客总人数
-    N_resident = N_RESIDENT  # 本地人数
 
-    Ad = Ad_g + Ad_other  # 总宣传费用
-    N_tourist_g = N_tourist * (Ad_g/Ad)  # 冰川游客人数
-    N_tourist_other = N_tourist * (Ad_other / Ad)  # 其他景点人数
-
-    Fcomp = N_tourist_g * Ticket_g + N_tourist_other * Ticket_other + N_tourist * Cost_tourist_other + N_resident * Cost_resident  # 企业收入每天
-    return -Fcomp
-
-def func4(arr):
-    Tax_tourist = arr[0]  # 游客税 百分比
-    Tax_other = arr[1]  # 其他税 百分比
-    Ticket_g = arr[2]  # 游客冰川门票花费 单个人
-    Ticket_other = arr[3]  # 游客其他景点门票花费 单个人
-    Cost_tourist_other = arr[4]  # 游客其余花费 单个人
-    Cost_resident = arr[5]  # 本地花费 单个人
-    Ad_g = arr[6]  # 冰川宣传花费
-    Ad_other = arr[7]  # 其余景点宣传花费
-
-    N_tourist = N_TOURIST  # 游客总人数
-
-    Ad = Ad_g + Ad_other  # 总宣传费用
-    N_tourist_g = N_tourist * (Ad_g/Ad)  # 冰川游客人数
-    N_tourist_other = N_tourist * (Ad_other / Ad)  # 其他景点人数
-
-    Ftourist = (N_tourist_g * Ticket_g + N_tourist_other * Ticket_other) * (1 + Tax_tourist) + (N_tourist * Cost_tourist_other) * (1 + Tax_other)
-    Ftourist = Ftourist / N_tourist  # 游客人均支出每天
-
-    return Ftourist
-
-def func5(arr):
-    Tax_tourist = arr[0]  # 游客税 百分比
-    Tax_other = arr[1]  # 其他税 百分比
-    Ticket_g = arr[2]  # 游客冰川门票花费 单个人
-    Ticket_other = arr[3]  # 游客其他景点门票花费 单个人
-    Cost_tourist_other = arr[4]  # 游客其余花费 单个人
-    Cost_resident = arr[5]  # 本地花费 单个人
-    Ad_g = arr[6]  # 冰川宣传花费
-    Ad_other = arr[7]  # 其余景点宣传花费
-
-    Fres = Cost_resident * (1 + Tax_other)  # 居民人均支出每天
-    return Fres
-
-
-
-problem = Problem(num_of_variables=8, objectives=[func1, func2, func3, func4, func5], variables_range=[(0.1, 0.5),(0.1, 0.5),(20, 1000),(20, 1000),(20, 1000),(20, 500),(0.1,800),(0.1,800)], same_range=False, expand=False)
-evo = Evolution(problem,num_of_generations=10000,num_of_individuals=1200,mutation_param=20)
-func = [i.objectives for i in evo.evolve()]
-for i in func:
-    if i[0] < 16000 and i[1] < 0 and i[2] < 0 and i[3] < 500 and i[4] < 300 and i[4] < i[3]:
-        # 输出到txt文件
-        with open('output.txt', 'a') as f:
-            f.write(str(i) + '\n')
+# for i in func:
+#     if i[0] < 16000 and i[1] < 0 and i[2] < 0 and i[3] < 500 and i[4] < 300 and i[4] < i[3]:
+#         # 输出到txt文件
+#         with open('output.txt', 'a') as f:
+#             f.write(str(i) + '\n')
 
 # function1 = [i[0] for i in func]
 # function2 = [i[1] for i in func]
